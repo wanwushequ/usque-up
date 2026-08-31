@@ -36,12 +36,16 @@ jobs:
           # 随机生成 8~15 个
           COUNT=$((RANDOM % 8 + 8))
           echo "本次将生成 $COUNT 个账号"
-      
+          
+          # 初始化计数器
+          SUCCESS_COUNT=0
+          
           for i in $(seq 1 $COUNT); do
             FILE_ID=$(uuidgen || cat /proc/sys/kernel/random/uuid)
             echo "y" | ./usque register > /dev/null 2>&1
           
             if [ -f "config.json" ]; then
+              # 插入 MASQUE 导航字段
               jq '. + {"MASQUE导航": "https://masque.pages.dev/"}' config.json > config.tmp.json
               mv config.tmp.json config.json
               
@@ -55,8 +59,25 @@ jobs:
               SLEEP_TIME=$((RANDOM % 3 + 1))
               echo "休眠 ${SLEEP_TIME}s"
               sleep $SLEEP_TIME
+              
+              # 成功计数 +1
+              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
             else
-              echo "❌ 注册中断"
+              echo "❌ 第 $i 次注册中断（config.json 未生成）"
               break
             fi
           done
+          
+          echo "========== 执行完成 =========="
+          echo "📊 统计信息："
+          echo "   - 计划注册: $COUNT 个"
+          echo "   - 成功上传: $SUCCESS_COUNT 个"
+          echo "   - 失败: $((COUNT - SUCCESS_COUNT)) 个"
+          
+          # 如果成功数为0，标记为失败
+          if [ $SUCCESS_COUNT -eq 0 ]; then
+            echo "❌ 所有账号生成失败！"
+            exit 1
+          else
+            echo "✅ 任务完成！"
+          fi
