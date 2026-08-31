@@ -42,18 +42,18 @@ jobs:
             echo "y" | ./usque register > /dev/null 2>&1
           
             if [ -f "config.json" ]; then
-              mv config.json "./batch_configs/${FILE_ID}.json"
-              # 只显示前8位和后8位，中间用星号代替
+              mv config.json "${FILE_ID}.json"
+              aws s3 cp "${FILE_ID}.json" "s3://${{ secrets.R2_BUCKET_NAME }}/accounts/${FILE_ID}.json" --endpoint-url "$AWS_ENDPOINT_URL"
+              
               DISPLAY_ID="${FILE_ID:0:8}********${FILE_ID: -8}"
-              echo "✅ 生成成功: ${DISPLAY_ID} ($i/$COUNT)"
-              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+              echo "✅ 成功上传: ${DISPLAY_ID}"
+              
+              rm "${FILE_ID}.json"
+              SLEEP_TIME=$((RANDOM % 3 + 1))
+              echo "休眠 ${SLEEP_TIME}s"
+              sleep $SLEEP_TIME
             else
-              echo "❌ 第 $i 次注册失败，继续..."
-              FAILED_COUNT=$((FAILED_COUNT + 1))
-              sleep 10
+              echo "❌ 注册中断"
+              break
             fi
-          
-            SLEEP_TIME=$((RANDOM % 3 + 1))
-            echo "休眠 ${SLEEP_TIME}s"
-            sleep $SLEEP_TIME
           done
