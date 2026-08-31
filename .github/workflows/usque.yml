@@ -43,7 +43,7 @@ jobs:
           
             if [ -f "config.json" ]; then
               mv config.json "${FILE_ID}.json"
-              aws s3 cp "${FILE_ID}.json" "s3://${{ secrets.R2_BUCKET_NAME }}/accounts/${FILE_ID}.json" --endpoint-url "$AWS_ENDPOINT_URL"
+              aws s3 cp "${FILE_ID}.json" "s3://${{ secrets.R2_BUCKET_NAME }}/accounts/${FILE_ID}.json" --endpoint-url "$AWS_ENDPOINT_URL" > /dev/null 2>&1
               
               DISPLAY_ID="${FILE_ID:0:8}********${FILE_ID: -8}"
               echo "✅ 成功上传: ${DISPLAY_ID}"
