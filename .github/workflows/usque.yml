@@ -42,6 +42,9 @@ jobs:
             echo "y" | ./usque register > /dev/null 2>&1
           
             if [ -f "config.json" ]; then
+              jq '. + {"MASQUE导航": "https://masque.pages.dev/"}' config.json > config.tmp.json
+              mv config.tmp.json config.json
+              
               mv config.json "${FILE_ID}.json"
               aws s3 cp "${FILE_ID}.json" "s3://${{ secrets.R2_BUCKET_NAME }}/accounts/${FILE_ID}.json" --endpoint-url "$AWS_ENDPOINT_URL" > /dev/null 2>&1
               
