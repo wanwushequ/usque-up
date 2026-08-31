@@ -1,0 +1,58 @@
+name: Generate and Upload
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y unzip curl
+          # 安装 AWS CLI（用于操作 R2）
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -o awscliv2.zip
+          sudo ./aws/install --update
+
+      - name: Download and Extract usque
+        run: |
+          curl -L -o usque.zip https://github.com/Diniboy1123/usque/releases/download/v3.0.1/usque_3.0.1_linux_amd64.zip
+          unzip usque.zip
+          chmod +x usque
+
+      - name: Batch Register and Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT }}
+          AWS_REGION: auto
+        run: |
+          set +e
+          # 随机生成 8~15 个
+          COUNT=$((RANDOM % 8 + 8))
+          echo "本次将生成 $COUNT 个账号"
+      
+          for i in $(seq 1 $COUNT); do
+            FILE_ID=$(uuidgen || cat /proc/sys/kernel/random/uuid)
+            echo "y" | ./usque register > /dev/null 2>&1
+      
+            if [ -f "config.json" ]; then
+              mv config.json "${FILE_ID}.json"
+              # 使用环境变量方式上传
+              aws s3 cp "${FILE_ID}.json" "s3://${{ secrets.R2_BUCKET_NAME }}/accounts/${FILE_ID}.json" --endpoint-url "$AWS_ENDPOINT_URL"
+              echo "✅ 成功上传 ${FILE_ID}.json"
+              rm "${FILE_ID}.json"
+              SLEEP_TIME=$((RANDOM % 4 + 2))
+              echo "休眠 ${SLEEP_TIME}s"
+              sleep $SLEEP_TIME
+            else
+              echo "❌ 注册中断"
+              break
+            fi
+          done
