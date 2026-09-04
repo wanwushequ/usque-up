@@ -22,10 +22,10 @@ jobs:
       - name: Download and Extract usque
         run: |
           curl -L -o usque.zip https://github.com/Diniboy1123/usque/releases/download/v3.0.1/usque_3.0.1_linux_amd64.zip
-          unzip usque.zip
+          unzip -o usque.zip
           chmod +x usque
 
-      - name: Register and Upload
+      - name: UP2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -34,7 +34,7 @@ jobs:
         run: |
           set +e
           COUNT=$((RANDOM % 8 + 8))
-          echo "本次将生成 $COUNT 个账号"
+          echo "本次计划 $COUNT 个"
           
           SUCCESS_COUNT=0
           
@@ -59,20 +59,20 @@ jobs:
               
               SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
             else
-              echo "❌ 第 $i 次注册中断（config.json 未生成）"
+              echo "❌ 第 $i 次中断"
               break
             fi
           done
           
           echo "========== 执行完成 =========="
           echo "📊 统计信息："
-          echo "   - 计划注册: $COUNT 个"
-          echo "   - 成功上传: $SUCCESS_COUNT 个"
+          echo "   - 计划: $COUNT 个"
+          echo "   - 成功: $SUCCESS_COUNT 个"
           echo "   - 失败: $((COUNT - SUCCESS_COUNT)) 个"
           
           # 如果成功数为0，标记为失败
           if [ $SUCCESS_COUNT -eq 0 ]; then
-            echo "❌ 所有账号生成失败！"
+            echo "❌ 全部失败！"
             exit 1
           else
             echo "✅ 任务完成！"
