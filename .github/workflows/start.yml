@@ -23,9 +23,6 @@ jobs:
           WORKFLOWS=(
             "usque.yml|0"
             "usque.yml|0"
-            "usque.yml|0"
-            "usque.yml|0"
-            "usque.yml|0"
           )
 
           for item in "${WORKFLOWS[@]}"; do
