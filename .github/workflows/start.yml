@@ -22,7 +22,6 @@ jobs:
           # 你可以在这里非常方便地编辑顺序和时间
           WORKFLOWS=(
             "usque.yml|0"
-            "usque.yml|0"
           )
 
           for item in "${WORKFLOWS[@]}"; do
