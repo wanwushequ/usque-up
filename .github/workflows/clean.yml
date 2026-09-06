@@ -1,0 +1,86 @@
+name: clean
+
+on:
+  # 北京时间凌晨3点
+  schedule:
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install AWS CLI
+        run: |
+          sudo apt-get update && sudo apt-get install -y unzip curl
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -o awscliv2.zip
+          sudo ./aws/install --update
+
+      - name: Clear R2 Bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT }}
+          AWS_REGION: auto
+          BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          echo "=========================================="
+          echo "🗑️  开始清空 R2 存储桶"
+          echo "=========================================="
+          
+          # 显示清理前的文件数量
+          echo "📊 清理前统计："
+          BEFORE_COUNT=$(aws s3 ls "s3://${BUCKET_NAME}/" --endpoint-url "$AWS_ENDPOINT_URL" --recursive | wc -l)
+          echo "   - 文件总数: $BEFORE_COUNT"
+          
+          # 显示桶大小
+          BEFORE_SIZE=$(aws s3 ls "s3://${BUCKET_NAME}/" --endpoint-url "$AWS_ENDPOINT_URL" --recursive --human-readable --summarize | grep "Total Size" | awk '{print $3, $4}')
+          echo "   - 总大小: $BEFORE_SIZE"
+          
+          echo ""
+          echo "⚠️  正在删除所有文件..."
+          
+          # 删除所有文件
+          aws s3 rm "s3://${BUCKET_NAME}/" --endpoint-url "$AWS_ENDPOINT_URL" --recursive
+          
+          # 退出码检查
+          if [ $? -eq 0 ]; then
+            echo ""
+            echo "✅ 清理成功！"
+            
+            # 显示清理后的统计
+            AFTER_COUNT=$(aws s3 ls "s3://${BUCKET_NAME}/" --endpoint-url "$AWS_ENDPOINT_URL" --recursive | wc -l)
+            echo ""
+            echo "📊 清理后统计："
+            echo "   - 文件总数: $AFTER_COUNT"
+            echo "   - 已删除: $((BEFORE_COUNT - AFTER_COUNT)) 个文件"
+          else
+            echo ""
+            echo "❌ 清理失败！"
+            exit 1
+          fi
+          
+          echo ""
+          echo "=========================================="
+          echo "✅ 任务完成"
+          echo "=========================================="
+
+      - name: Verify Cleanup
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT }}
+          AWS_REGION: auto
+          BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          echo "🔍 验证清理结果..."
+          REMAINING=$(aws s3 ls "s3://${BUCKET_NAME}/" --endpoint-url "$AWS_ENDPOINT_URL" --recursive | wc -l)
+          
+          if [ "$REMAINING" -eq 0 ]; then
+            echo "✅ 存储桶已完全清空！"
+          else
+            echo "⚠️  还有 $REMAINING 个文件未删除"
+            # 列出剩余文件（如果有）
+            aws s3 ls "s3://${BUCKET_NAME}/" --endpoint-url "$AWS_ENDPOINT_URL" --recursive
+          fi
