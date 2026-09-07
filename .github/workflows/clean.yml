@@ -42,7 +42,7 @@ jobs:
           echo "⚠️  正在删除所有文件..."
           
           # 删除所有文件
-          aws s3 rm "s3://${BUCKET_NAME}/" --endpoint-url "$AWS_ENDPOINT_URL" --recursive
+          # aws s3 rm "s3://${BUCKET_NAME}/" --endpoint-url "$AWS_ENDPOINT_URL" --recursive
           
           # 退出码检查
           if [ $? -eq 0 ]; then
