@@ -1,9 +1,10 @@
 name: clean
 
 on:
-  # 北京时间凌晨3点
+  # 北京时间
   schedule:
-    - cron: '0 19 * * *'
+    - cron: '0 19 * * *'   # 凌晨3点
+    - cron: '0 7 * * *'    # 下午3点
   workflow_dispatch:
 
 jobs:
@@ -26,7 +27,7 @@ jobs:
           BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
           echo "=========================================="
-          echo "🗑️  开始清空 R2 存储桶"
+          echo "🗑️  开始清空存储桶"
           echo "=========================================="
           
           # 显示清理前的文件数量

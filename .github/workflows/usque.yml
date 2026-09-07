@@ -33,7 +33,8 @@ jobs:
           AWS_REGION: auto
         run: |
           set +e
-          COUNT=$((RANDOM % 8 + 8))
+          # COUNT=$((RANDOM % 8 + 8))
+          COUNT=6
           echo "本次计划 $COUNT 个"
           
           SUCCESS_COUNT=0
