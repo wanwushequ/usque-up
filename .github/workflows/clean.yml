@@ -83,5 +83,5 @@ jobs:
           else
             echo "⚠️  还有 $REMAINING 个文件未删除"
             # 列出剩余文件（如果有）
-            aws s3 ls "s3://${BUCKET_NAME}/" --endpoint-url "$AWS_ENDPOINT_URL" --recursive
+            # aws s3 ls "s3://${BUCKET_NAME}/" --endpoint-url "$AWS_ENDPOINT_URL" --recursive
           fi
