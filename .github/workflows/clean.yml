@@ -2,7 +2,7 @@ name: clean
 
 on:
   schedule:
-    - cron: '0 19 * * *'   # 北京时间凌晨3点
+    - cron: '0 18 * * *'   # 北京时间凌晨2点
     - cron: '0 6 * * *'    # 北京时间下午2点
   workflow_dispatch:
 
