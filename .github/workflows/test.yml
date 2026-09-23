@@ -48,10 +48,8 @@ jobs:
             FILE_ID=$(uuidgen || cat /proc/sys/kernel/random/uuid)
             echo "===== 第 $i 次，FILE_ID=$FILE_ID ====="
 
-            # 清理上一次残留
             rm -f warpscout-account.json config.json
 
-            # 执行 register，生成 warpscout-account.json
             ./warpscout register > /dev/null 2>&1
             RET=$?
             echo "register 退出码: $RET"
@@ -61,13 +59,10 @@ jobs:
               break
             fi
 
-            # 按 bat 脚本的字段映射，将 warpscout-account.json 转成 config.json
             python3 - <<'PY'
           import json, collections, sys
-
           src = "warpscout-account.json"
           dst = "config.json"
-
           try:
               with open(src, "r", encoding="utf-8") as f:
                   a = json.load(f)
@@ -81,17 +76,17 @@ jobs:
           out = collections.OrderedDict()
 
           if m:
-              out["private_key"]     = str(m.get("private_key", "") or "")
-              out["endpoint_v4"]     = "162.159.198.2"
-              out["endpoint_v6"]     = "2606:4700:103::2"
-              out["endpoint_h2_v4"]  = "162.159.198.2"
-              out["endpoint_h2_v6"]  = ""
+              out["private_key"]      = str(m.get("private_key", "") or "")
+              out["endpoint_v4"]      = "162.159.198.2"
+              out["endpoint_v6"]      = "2606:4700:103::2"
+              out["endpoint_h2_v4"]   = "162.159.198.2"
+              out["endpoint_h2_v6"]   = ""
               out["endpoint_pub_key"] = str(m.get("peer_public_key", "") or "")
-              out["license"]         = ""
-              out["id"]              = str(m.get("id", "") or "")
-              out["access_token"]    = str(m.get("token", "") or "")
-              out["ipv4"]            = str(m.get("ipv4", "") or "")
-              out["ipv6"]            = str(m.get("ipv6", "") or "")
+              out["license"]          = ""
+              out["id"]               = str(m.get("id", "") or "")
+              out["access_token"]     = str(m.get("token", "") or "")
+              out["ipv4"]             = str(m.get("ipv4", "") or "")
+              out["ipv6"]             = str(m.get("ipv6", "") or "")
 
           out["wg_id"]              = str(a.get("id", "") or "")
           out["wg_token"]           = str(a.get("token", "") or "")
@@ -121,13 +116,48 @@ jobs:
               break
             fi
 
-            # 删除中间产物
             rm -f warpscout-account.json
 
-            # 改成唯一文件名，避免根目录互相覆盖
             mv config.json "${FILE_ID}.json"
 
-            # 上传到 R2（逻辑不变）
+            # ===== 上传 R2 / 提交仓库之前，先校验字段完整性 =====
+            python3 - "$FILE_ID" <<'PY'
+          import json, sys
+          fid = sys.argv[1]
+          path = f"{fid}.json"
+          try:
+              with open(path, "r", encoding="utf-8") as f:
+                  d = json.load(f)
+          except Exception as e:
+              print("READ_FAIL", e)
+              sys.exit(2)
+
+          # 必需字段：masque 一套 + wg 一套
+          required = [
+              "private_key", "endpoint_v4", "endpoint_v6",
+              "endpoint_h2_v4", "endpoint_pub_key",
+              "id", "access_token", "ipv4", "ipv6",
+              "wg_id", "wg_token", "wg_private_key",
+              "wg_peer_public_key", "wg_ipv4", "wg_ipv6",
+          ]
+          missing = [k for k in required if not str(d.get(k, "")).strip()]
+          if missing:
+              print("INCOMPLETE missing:", ",".join(missing))
+              sys.exit(3)
+          print("COMPLETE")
+          PY
+            CHECK=$?
+
+            if [ $CHECK -ne 0 ]; then
+              echo "⚠️ 第 $i 次字段不完整（校验码 $CHECK），删除该文件，不上传、不提交"
+              rm -f "${FILE_ID}.json"
+              SLEEP_TIME=$((RANDOM % 3 + 1))
+              echo "休眠 ${SLEEP_TIME}s"
+              sleep $SLEEP_TIME
+              continue
+            fi
+
+            # ===== 完整，才上传 R2 =====
             # aws s3 cp "${FILE_ID}.json" "s3://${{ secrets.R2_BUCKET_NAME }}/accounts/${FILE_ID}.json" --endpoint-url "$AWS_ENDPOINT_URL" > /dev/null 2>&1
             echo "R2 上传退出码: $?"
 
@@ -141,12 +171,15 @@ jobs:
             SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
           done
 
-          # ===== 循环结束后，把本次生成的所有 ${FILE_ID}.json 提交到仓库根目录 =====
+          # ===== 循环结束后，只提交完整且保留在根目录的 ${FILE_ID}.json =====
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           for f in *.json; do
             [ -f "$f" ] || continue
-            git add -f "$f"
+            # 只 add UUID 命名的 json，避免把 warpscout-account.json 等带进去
+            if [[ "$f" =~ ^[0-9a-fA-F-]{36}\.json$ ]]; then
+              git add -f "$f"
+            fi
           done
           git commit -m "up"
           git push || echo "推送失败，继续执行"
