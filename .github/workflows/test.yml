@@ -1,8 +1,8 @@
-name: test
+name: usque-up
 
 on:
   #schedule:
-    #- cron: '*/5 * * * *' 
+    #- cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install dependencies
         run: |
@@ -26,6 +28,7 @@ jobs:
           curl -L -o warpscout.tar.gz https://github.com/vernette/warpscout/releases/download/v0.16.0/warpscout_0.16.0_linux_amd64.tar.gz
           tar -xzf warpscout.tar.gz
           chmod +x warpscout
+          ./warpscout --version || true
 
       - name: UP2
         env:
@@ -43,42 +46,108 @@ jobs:
 
           for i in $(seq 1 $COUNT); do
             FILE_ID=$(uuidgen || cat /proc/sys/kernel/random/uuid)
-            echo "y" | ./warpscout register > /dev/null 2>&1
+            echo "===== 第 $i 次，FILE_ID=$FILE_ID ====="
 
-            if [ -f "config.json" ]; then
-              jq '. + {"MASQUE导航": "https://masque.pages.dev/"}' config.json > config.tmp.json
-              mv config.tmp.json config.json
+            # 清理上一次残留
+            rm -f warpscout-account.json config.json
 
-              # 用 FILE_ID 命名，避免同名覆盖
-              mv config.json "${FILE_ID}.json"
+            # 执行 register，生成 warpscout-account.json
+            ./warpscout register > /dev/null 2>&1
+            RET=$?
+            echo "register 退出码: $RET"
 
-              # 上传 R2（逻辑不变）
-              # aws s3 cp "${FILE_ID}.json" "s3://${{ secrets.R2_BUCKET_NAME }}/accounts/${FILE_ID}.json" --endpoint-url "$AWS_ENDPOINT_URL" > /dev/null 2>&1
-
-              DISPLAY_ID="${FILE_ID:0:8}********${FILE_ID: -8}"
-              echo "✅ 成功上传: ${DISPLAY_ID}"
-
-              SLEEP_TIME=$((RANDOM % 3 + 1))
-              echo "休眠 ${SLEEP_TIME}s"
-              sleep $SLEEP_TIME
-
-              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-            else
-              echo "❌ 第 $i 次中断"
+            if [ ! -f "warpscout-account.json" ]; then
+              echo "❌ 第 $i 次未生成 warpscout-account.json，中断"
               break
             fi
+
+            # 按 bat 脚本的字段映射，将 warpscout-account.json 转成 config.json
+            python3 - <<'PY'
+          import json, collections, sys
+
+          src = "warpscout-account.json"
+          dst = "config.json"
+
+          try:
+              with open(src, "r", encoding="utf-8") as f:
+                  a = json.load(f)
+          except Exception as e:
+              print("source read failed:", e)
+              sys.exit(1)
+
+          m = a.get("masque") or {}
+          o = a.get("outer") or {}
+
+          out = collections.OrderedDict()
+
+          if m:
+              out["private_key"]     = str(m.get("private_key", "") or "")
+              out["endpoint_v4"]     = "162.159.198.2"
+              out["endpoint_v6"]     = "2606:4700:103::2"
+              out["endpoint_h2_v4"]  = "162.159.198.2"
+              out["endpoint_h2_v6"]  = ""
+              out["endpoint_pub_key"] = str(m.get("peer_public_key", "") or "")
+              out["license"]         = ""
+              out["id"]              = str(m.get("id", "") or "")
+              out["access_token"]    = str(m.get("token", "") or "")
+              out["ipv4"]            = str(m.get("ipv4", "") or "")
+              out["ipv6"]            = str(m.get("ipv6", "") or "")
+
+          out["wg_id"]              = str(a.get("id", "") or "")
+          out["wg_token"]           = str(a.get("token", "") or "")
+          out["wg_private_key"]     = str(a.get("private_key", "") or "")
+          out["wg_peer_public_key"] = str(a.get("peer_public_key", "") or "")
+          out["wg_ipv4"]            = str(a.get("ipv4", "") or "")
+          out["wg_ipv6"]            = str(a.get("ipv6", "") or "")
+
+          if o:
+              out["awg_id"]              = str(o.get("id", "") or "")
+              out["awg_token"]           = str(o.get("token", "") or "")
+              out["awg_private_key"]     = str(o.get("private_key", "") or "")
+              out["awg_peer_public_key"] = str(o.get("peer_public_key", "") or "")
+              out["awg_ipv4"]            = str(o.get("ipv4", "") or "")
+              out["awg_ipv6"]            = str(o.get("ipv6", "") or "")
+
+          out["MASQUE导航"] = "https://masque.pages.dev/"
+
+          with open(dst, "w", encoding="utf-8") as f:
+              json.dump(out, f, ensure_ascii=False, indent=2)
+
+          print("written:", dst)
+          PY
+
+            if [ ! -f "config.json" ]; then
+              echo "❌ 第 $i 次转换 config.json 失败，中断"
+              break
+            fi
+
+            # 删除中间产物
+            rm -f warpscout-account.json
+
+            # 改成唯一文件名，避免根目录互相覆盖
+            mv config.json "${FILE_ID}.json"
+
+            # 上传到 R2（逻辑不变）
+            # aws s3 cp "${FILE_ID}.json" "s3://${{ secrets.R2_BUCKET_NAME }}/accounts/${FILE_ID}.json" --endpoint-url "$AWS_ENDPOINT_URL" > /dev/null 2>&1
+            echo "R2 上传退出码: $?"
+
+            DISPLAY_ID="${FILE_ID:0:8}********${FILE_ID: -8}"
+            echo "✅ 成功上传: ${DISPLAY_ID}"
+
+            SLEEP_TIME=$((RANDOM % 3 + 1))
+            echo "休眠 ${SLEEP_TIME}s"
+            sleep $SLEEP_TIME
+
+            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
           done
 
-          # ===== 循环结束后，把本次生成的所有 json 提交到仓库根目录 =====
+          # ===== 循环结束后，把本次生成的所有 ${FILE_ID}.json 提交到仓库根目录 =====
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # 找出本次循环生成的 ${FILE_ID}.json（排除脚本自身文件）
           for f in *.json; do
             [ -f "$f" ] || continue
             git add -f "$f"
           done
-
           git commit -m "chore: add generated configs $(date +%Y%m%d%H%M%S) [skip ci]" || echo "无变化，跳过提交"
           git push || echo "推送失败，继续执行"
 
