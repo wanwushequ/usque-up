@@ -1,9 +1,0 @@
-{
-  "wg_id": "cba32a46-9bb6-4933-a048-35571fba0b88",
-  "wg_token": "7a0974f4-e70a-4154-a63a-9ccb376868ac",
-  "wg_private_key": "GHL+C5xoU449mihcZdQW+LhC8kGL+FxdZCOlVCM4A0k=",
-  "wg_peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-  "wg_ipv4": "172.16.0.2",
-  "wg_ipv6": "2606:4700:110:8d60:59aa:89ab:623c:123d",
-  "MASQUE导航": "https://masque.pages.dev/"
-}
