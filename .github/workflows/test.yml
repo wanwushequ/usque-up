@@ -148,7 +148,7 @@ jobs:
             [ -f "$f" ] || continue
             git add -f "$f"
           done
-          git commit -m "chore: add generated configs $(date +%Y%m%d%H%M%S) [skip ci]" || echo "无变化，跳过提交"
+          git commit -m "up"
           git push || echo "推送失败，继续执行"
 
           echo "========== 执行完成 =========="
