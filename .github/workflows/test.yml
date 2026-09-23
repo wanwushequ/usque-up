@@ -1,8 +1,8 @@
 name: test
 
 on:
-  #schedule:
-    #- cron: '*/5 * * * *' 
+  schedule:
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -46,7 +46,9 @@ jobs:
 
           for i in $(seq 1 $COUNT); do
             FILE_ID=$(uuidgen || cat /proc/sys/kernel/random/uuid)
-            echo "===== 第 $i 次，FILE_ID=$FILE_ID ====="
+            # 仓库文件名隐去中间：前8 + ******** + 后8
+            SAFE_ID="${FILE_ID:0:8}********${FILE_ID: -8}"
+            echo "===== 第 $i 次，FILE_ID=${SAFE_ID} ====="
 
             rm -f warpscout-account.json config.json
 
@@ -118,10 +120,11 @@ jobs:
 
             rm -f warpscout-account.json
 
-            mv config.json "${FILE_ID}.json"
+            # 用隐去中间的文件名，避免完整 UUID 出现在仓库里
+            mv config.json "${SAFE_ID}.json"
 
             # ===== 上传 R2 / 提交仓库之前，先校验字段完整性 =====
-            python3 - "$FILE_ID" <<'PY'
+            python3 - "$SAFE_ID" <<'PY'
           import json, sys
           fid = sys.argv[1]
           path = f"{fid}.json"
@@ -150,19 +153,18 @@ jobs:
 
             if [ $CHECK -ne 0 ]; then
               echo "⚠️ 第 $i 次字段不完整（校验码 $CHECK），删除该文件，不上传、不提交"
-              rm -f "${FILE_ID}.json"
+              rm -f "${SAFE_ID}.json"
               SLEEP_TIME=$((RANDOM % 3 + 1))
               echo "休眠 ${SLEEP_TIME}s"
               sleep $SLEEP_TIME
               continue
             fi
 
-            # ===== 完整，才上传 R2 =====
-            # aws s3 cp "${FILE_ID}.json" "s3://${{ secrets.R2_BUCKET_NAME }}/accounts/${FILE_ID}.json" --endpoint-url "$AWS_ENDPOINT_URL" > /dev/null 2>&1
+            # ===== 完整，才上传 R2（R2 用完整 UUID 路径）=====
+            # aws s3 cp "${SAFE_ID}.json" "s3://${{ secrets.R2_BUCKET_NAME }}/accounts/${FILE_ID}.json" --endpoint-url "$AWS_ENDPOINT_URL" > /dev/null 2>&1
             echo "R2 上传退出码: $?"
 
-            DISPLAY_ID="${FILE_ID:0:8}********${FILE_ID: -8}"
-            echo "✅ 成功上传: ${DISPLAY_ID}"
+            echo "✅ 成功上传: ${SAFE_ID}"
 
             SLEEP_TIME=$((RANDOM % 3 + 1))
             echo "休眠 ${SLEEP_TIME}s"
@@ -171,13 +173,13 @@ jobs:
             SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
           done
 
-          # ===== 循环结束后，只提交完整且保留在根目录的 ${FILE_ID}.json =====
+          # ===== 循环结束后，只提交完整且保留在根目录的 ${SAFE_ID}.json =====
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           for f in *.json; do
             [ -f "$f" ] || continue
-            # 只 add UUID 命名的 json，避免把 warpscout-account.json 等带进去
-            if [[ "$f" =~ ^[0-9a-fA-F-]{36}\.json$ ]]; then
+            # 只 add 形如 xxxxxxxx********yyyyyyyy.json 的隐去名文件
+            if [[ "$f" =~ ^[0-9a-fA-F]{8}\*{8}[0-9a-fA-F]{8}\.json$ ]]; then
               git add -f "$f"
             fi
           done
