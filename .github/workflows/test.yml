@@ -1,0 +1,96 @@
+name: usque-up
+
+on:
+  #schedule:
+    #- cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y unzip curl jq
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -o awscliv2.zip
+          sudo ./aws/install --update
+
+      - name: Download and Extract warpscout
+        run: |
+          curl -L -o warpscout.tar.gz https://github.com/vernette/warpscout/releases/download/v0.16.0/warpscout_0.16.0_linux_amd64.tar.gz
+          tar -xzf warpscout.tar.gz
+          chmod +x warpscout
+
+      - name: UP2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT }}
+          AWS_REGION: auto
+        run: |
+          set +e
+          # COUNT=$((RANDOM % 8 + 8))
+          COUNT=6
+          echo "本次计划 $COUNT 个"
+
+          SUCCESS_COUNT=0
+
+          for i in $(seq 1 $COUNT); do
+            FILE_ID=$(uuidgen || cat /proc/sys/kernel/random/uuid)
+            echo "y" | ./warpscout register > /dev/null 2>&1
+
+            if [ -f "config.json" ]; then
+              jq '. + {"MASQUE导航": "https://masque.pages.dev/"}' config.json > config.tmp.json
+              mv config.tmp.json config.json
+
+              # 用 FILE_ID 命名，避免同名覆盖
+              mv config.json "${FILE_ID}.json"
+
+              # 上传 R2（逻辑不变）
+              # aws s3 cp "${FILE_ID}.json" "s3://${{ secrets.R2_BUCKET_NAME }}/accounts/${FILE_ID}.json" --endpoint-url "$AWS_ENDPOINT_URL" > /dev/null 2>&1
+
+              DISPLAY_ID="${FILE_ID:0:8}********${FILE_ID: -8}"
+              echo "✅ 成功上传: ${DISPLAY_ID}"
+
+              SLEEP_TIME=$((RANDOM % 3 + 1))
+              echo "休眠 ${SLEEP_TIME}s"
+              sleep $SLEEP_TIME
+
+              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            else
+              echo "❌ 第 $i 次中断"
+              break
+            fi
+          done
+
+          # ===== 循环结束后，把本次生成的所有 json 提交到仓库根目录 =====
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 找出本次循环生成的 ${FILE_ID}.json（排除脚本自身文件）
+          for f in *.json; do
+            [ -f "$f" ] || continue
+            git add -f "$f"
+          done
+
+          git commit -m "chore: add generated configs $(date +%Y%m%d%H%M%S) [skip ci]" || echo "无变化，跳过提交"
+          git push || echo "推送失败，继续执行"
+
+          echo "========== 执行完成 =========="
+          echo "📊 统计信息："
+          echo "   - 计划: $COUNT 个"
+          echo "   - 成功: $SUCCESS_COUNT 个"
+          echo "   - 失败: $((COUNT - SUCCESS_COUNT)) 个"
+
+          if [ $SUCCESS_COUNT -eq 0 ]; then
+            echo "❌ 全部失败！"
+            exit 1
+          else
+            echo "✅ 任务完成！"
+          fi
