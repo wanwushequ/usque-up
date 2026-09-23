@@ -47,7 +47,7 @@ jobs:
           for i in $(seq 1 $COUNT); do
             FILE_ID=$(uuidgen || cat /proc/sys/kernel/random/uuid)
             # 仓库文件名隐去中间：前8 + ******** + 后8
-            SAFE_ID="${FILE_ID:0:8}********${FILE_ID: -8}"
+            SAFE_ID="${FILE_ID:0:8}------${FILE_ID: -8}"
             echo "===== 第 $i 次，FILE_ID=${SAFE_ID} ====="
 
             rm -f warpscout-account.json config.json
@@ -173,17 +173,23 @@ jobs:
             SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
           done
 
-          # ===== 循环结束后，只提交完整且保留在根目录的 ${SAFE_ID}.json =====
+          # ===== 循环结束后，只提交完整且保留的 ${SAFE_ID}.json 到 json/ 文件夹 =====
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 确保 json 目录存在
+          mkdir -p json
+
           for f in *.json; do
             [ -f "$f" ] || continue
-            # 只 add 形如 xxxxxxxx********yyyyyyyy.json 的隐去名文件
-            if [[ "$f" =~ ^[0-9a-fA-F]{8}\*{8}[0-9a-fA-F]{8}\.json$ ]]; then
-              git add -f "$f"
+            # 只处理形如 xxxxxxxx------yyyyyyyy.json 的隐去名文件
+            if [[ "$f" =~ ^[0-9a-fA-F]{8}-{6}[0-9a-fA-F]{8}\.json$ ]]; then
+              mv "$f" "json/$f"
+              git add -f "json/$f"
             fi
           done
-          git commit -m "up"
+
+          git commit -m "up" || echo "无变化，跳过提交"
           git push || echo "推送失败，继续执行"
 
           echo "========== 执行完成 =========="
